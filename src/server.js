@@ -43,6 +43,7 @@ function readBody(req) {
     req.on('data', (chunk) => chunks.push(chunk));
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
+    req.on('aborted', () => reject(new Error('upload aborted')));
   });
 }
 
@@ -64,14 +65,18 @@ export function buildServer({ db, statementImport }) {
         return;
       }
       if (req.method === 'POST') {
-        const body = await readBody(req);
-        const text = statementFromMultipart(body, req.headers['content-type']);
-        const result = text ? importStatement(db, text) : null;
-        if (result === null) {
-          html(res, 400, `<p>That file isn&#39;t a bank statement.</p>\n${IMPORT_FORM}`);
-          return;
+        try {
+          const body = await readBody(req);
+          const text = statementFromMultipart(body, req.headers['content-type']);
+          const result = text ? importStatement(db, text) : null;
+          if (result === null) {
+            html(res, 400, `<p>That file isn&#39;t a bank statement.</p>\n${IMPORT_FORM}`);
+            return;
+          }
+          html(res, 200, `<p>Added ${result.added}, skipped ${result.skipped}</p>`);
+        } catch {
+          html(res, 500, '<p>Something went wrong reading that upload.</p>');
         }
-        html(res, 200, `<p>Added ${result.added}, skipped ${result.skipped}</p>`);
         return;
       }
     }

@@ -63,6 +63,21 @@ test('a header with no rows adds nothing and says Added 0, skipped 0', async () 
   assert.match(html, /Added 0, skipped 0/);
 });
 
+test('a failed upload answers 500 and the server keeps running', async () => {
+  const { db, server, base } = await start();
+  db.exec('DROP TABLE transactions');
+  const res = await fetch(`${base}/import`, { method: 'POST', body: upload(STATEMENT) });
+  const html = await res.text();
+  assert.equal(res.status, 500);
+  assert.match(html, /Something went wrong reading that upload\./);
+  assert.doesNotMatch(html, /no such table/);
+  // The home page counts rows, so the table is restored before asking for it.
+  db.exec('CREATE TABLE transactions (id INTEGER PRIMARY KEY, date TEXT, description TEXT, cents INTEGER)');
+  const home = await fetch(`${base}/`);
+  server.close();
+  assert.equal(home.status, 200);
+});
+
 test('with the flag off, /import is a 404', async () => {
   const { server, base } = await start(false);
   const get = await fetch(`${base}/import`);
