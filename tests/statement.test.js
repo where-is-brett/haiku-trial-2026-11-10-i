@@ -74,3 +74,12 @@ test('29 February in a leap year is accepted', () => {
   const rows = parseStatement('Date,Description,Amount\n29/02/2024,A,1.00');
   assert.equal(rows[0].date, '2024-02-29');
 });
+
+test('a leading byte-order mark is ignored before the header check', () => {
+  const rows = parseStatement('﻿Date,Description,Amount\n03/08/2026,Kestrel Coffee Bar,6.50\n');
+  assert.deepEqual(rows, [{ date: '2026-08-03', description: 'Kestrel Coffee Bar', cents: 650 }]);
+});
+
+test('a byte-order mark in the middle of the header is not a statement', () => {
+  assert.equal(parseStatement('Date,﻿Description,Amount\n03/08/2026,A,1.00'), null);
+});

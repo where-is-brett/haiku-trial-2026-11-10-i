@@ -50,7 +50,9 @@ function splitFields(line) {
 
 // Reads bank statement CSV text into rows, or returns null when the text is not a statement.
 export function parseStatement(text) {
-  const lines = String(text)
+  const body = String(text);
+  const unmarked = body.startsWith('﻿') ? body.slice(1) : body;
+  const lines = unmarked
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
     .filter((line) => line.trim() !== '');
