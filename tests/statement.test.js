@@ -1,0 +1,85 @@
+// tests/statement.test.js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseStatement } from '../src/lib/statement.js';
+
+test('a statement is read into dated rows in cents', () => {
+  const rows = parseStatement('Date,Description,Amount\r\n03/08/2026,Kestrel Coffee Bar,6.50\r\n');
+  assert.deepEqual(rows, [{ date: '2026-08-03', description: 'Kestrel Coffee Bar', cents: 650 }]);
+});
+
+test('CRLF endings and a trailing blank line are ignored', () => {
+  const rows = parseStatement('Date,Description,Amount\r\n03/08/2026,A,1.00\r\n\r\n');
+  assert.equal(rows.length, 1);
+});
+
+test('a header with no rows is a statement with nothing in it', () => {
+  assert.deepEqual(parseStatement('Date,Description,Amount\r\n'), []);
+});
+
+test('a date not written DD/MM/YYYY is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n5/9/2026,A,1.00'), null);
+});
+
+test('a quoted description may hold a comma, and a quoted amount a thousands comma', () => {
+  const rows = parseStatement('Date,Description,Amount\n03/08/2026,"Marlowe, Homewares","1,234.50"');
+  assert.deepEqual(rows, [{ date: '2026-08-03', description: 'Marlowe, Homewares', cents: 123450 }]);
+});
+
+test('brackets and minus signs come back as negative cents', () => {
+  const rows = parseStatement('Date,Description,Amount\n19/08/2026,Marlowe,(40.00)\n25/08/2026,Payroll,-2100.00');
+  assert.deepEqual(rows.map((r) => r.cents), [-4000, -210000]);
+});
+
+test('the description is trimmed', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,  Kestrel  ,1.00')[0].description, 'Kestrel');
+});
+
+test('a wrong header is not a statement', () => {
+  assert.equal(parseStatement('Date,Payee,Amount\n03/08/2026,A,1.00'), null);
+});
+
+test('an empty file is not a statement', () => {
+  assert.equal(parseStatement(''), null);
+});
+
+test('a row with a bad date or amount is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n2026-08-03,A,1.00'), null);
+  assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,A,lots'), null);
+});
+
+test('a row with the wrong number of fields is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,A,1.00,extra'), null);
+});
+
+test('an amount with a comma outside a thousands group is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,Kestrel,"6,50"'), null);
+});
+
+test('an amount with a thousands comma is accepted', () => {
+  const rows = parseStatement('Date,Description,Amount\n03/08/2026,Kestrel,"1,234.50"');
+  assert.equal(rows[0].cents, 123450);
+});
+
+test('a quoted field left open at the end of the line is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,A,"6.50'), null);
+});
+
+test('a date that is not a real calendar date is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n45/67/2026,A,1.00'), null);
+  assert.equal(parseStatement('Date,Description,Amount\n31/02/2026,A,1.00'), null);
+});
+
+test('29 February in a leap year is accepted', () => {
+  const rows = parseStatement('Date,Description,Amount\n29/02/2024,A,1.00');
+  assert.equal(rows[0].date, '2024-02-29');
+});
+
+test('a leading byte-order mark is ignored before the header check', () => {
+  const rows = parseStatement('﻿Date,Description,Amount\n03/08/2026,Kestrel Coffee Bar,6.50\n');
+  assert.deepEqual(rows, [{ date: '2026-08-03', description: 'Kestrel Coffee Bar', cents: 650 }]);
+});
+
+test('a byte-order mark in the middle of the header is not a statement', () => {
+  assert.equal(parseStatement('Date,﻿Description,Amount\n03/08/2026,A,1.00'), null);
+});
