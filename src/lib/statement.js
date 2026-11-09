@@ -3,11 +3,22 @@ import { parseDate } from './dates.js';
 import { parseAmount } from './money.js';
 
 const HEADER = 'Date,Description,Amount';
-const DATE_PATTERN = /^\d{2}\/\d{2}\/\d{4}$/;
-const AMOUNT_PATTERN = /^(\(\d[\d,]*(\.\d{1,2})?\)|-?\d[\d,]*(\.\d{1,2})?)$/;
+const DATE_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+// Commas may only separate thousands groups; a plain run of digits is also allowed.
+const AMOUNT_PATTERN = /^(\((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\)|-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)$/;
+
+// True only when day, month and year name a real calendar date (29/02/2024 yes, 31/02/2026 no).
+function isRealDate(day, month, year) {
+  const date = new Date(Date.UTC(2000, 0, 1));
+  date.setUTCFullYear(year, month - 1, day);
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
 
 // Splits one CSV line into fields. A double-quoted field may hold commas,
-// and "" inside quotes is one quote. This is the only place that splits lines.
+// and "" inside quotes is one quote. Returns null when a quoted field is never closed.
+// This is the only place that splits lines.
 function splitFields(line) {
   const fields = [];
   let field = '';
@@ -32,6 +43,7 @@ function splitFields(line) {
       field += ch;
     }
   }
+  if (inQuotes) return null;
   fields.push(field);
   return fields;
 }
@@ -47,10 +59,12 @@ export function parseStatement(text) {
 
   const rows = [];
   for (const line of lines.slice(1)) {
-    const fields = splitFields(line).map((field) => field.trim());
-    if (fields.length !== 3) return null;
-    const [date, description, amount] = fields;
-    if (!DATE_PATTERN.test(date) || !AMOUNT_PATTERN.test(amount)) return null;
+    const split = splitFields(line);
+    if (split === null || split.length !== 3) return null;
+    const [date, description, amount] = split.map((field) => field.trim());
+    const dateParts = DATE_PATTERN.exec(date);
+    if (!dateParts || !AMOUNT_PATTERN.test(amount)) return null;
+    if (!isRealDate(Number(dateParts[1]), Number(dateParts[2]), Number(dateParts[3]))) return null;
     rows.push({ date: parseDate(date), description, cents: parseAmount(amount) });
   }
   return rows;

@@ -51,3 +51,26 @@ test('a row with a bad date or amount is not a statement', () => {
 test('a row with the wrong number of fields is not a statement', () => {
   assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,A,1.00,extra'), null);
 });
+
+test('an amount with a comma outside a thousands group is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,Kestrel,"6,50"'), null);
+});
+
+test('an amount with a thousands comma is accepted', () => {
+  const rows = parseStatement('Date,Description,Amount\n03/08/2026,Kestrel,"1,234.50"');
+  assert.equal(rows[0].cents, 123450);
+});
+
+test('a quoted field left open at the end of the line is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n03/08/2026,A,"6.50'), null);
+});
+
+test('a date that is not a real calendar date is not a statement', () => {
+  assert.equal(parseStatement('Date,Description,Amount\n45/67/2026,A,1.00'), null);
+  assert.equal(parseStatement('Date,Description,Amount\n31/02/2026,A,1.00'), null);
+});
+
+test('29 February in a leap year is accepted', () => {
+  const rows = parseStatement('Date,Description,Amount\n29/02/2024,A,1.00');
+  assert.equal(rows[0].date, '2024-02-29');
+});
